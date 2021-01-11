@@ -5,8 +5,9 @@ import os
 import shutil
 import subprocess
 import uuid
+import csv
 from collections import OrderedDict
-
+from tqdm import tqdm
 from joblib import delayed
 from joblib import Parallel
 import pandas as pd
@@ -14,6 +15,7 @@ import pandas as pd
 
 def create_video_folders(dataset, output_dir, tmp_dir):
     """Creates a directory for each label name in the dataset."""
+    # print(output_dir)
     if 'label-name' not in dataset.columns:
         this_dir = os.path.join(output_dir, 'test')
         if not os.path.exists(this_dir):
@@ -26,11 +28,18 @@ def create_video_folders(dataset, output_dir, tmp_dir):
         os.makedirs(tmp_dir)
 
     label_to_dir = {}
+    csv_out_file = open(os.path.join(output_dir,"dataset.csv"),"w")
+    csv_writer = csv.DictWriter(csv_out_file,fieldnames=["path","label"])
+    # print(dataset['label-name'].unique())
     for label_name in dataset['label-name'].unique():
         this_dir = os.path.join(output_dir, label_name)
         if not os.path.exists(this_dir):
             os.makedirs(this_dir)
+        csv_writer.writerow({"path":os.path.abspath(this_dir),"label":label_name})
+        # print("writing to csv")
         label_to_dir[label_name] = this_dir
+    # print("csv_writing done")
+    csv_out_file.close()
     return label_to_dir
 
 
@@ -50,8 +59,10 @@ def construct_video_filename(row, label_to_dir, trim_format='%06d'):
 
 
 def download_clip(video_identifier, output_filename,
-                  start_time, end_time,
+                  start_time, end_time, out_height=256, out_width=-1,
                   tmp_dir='/tmp/kinetics',
+        # output = subprocess.check_output(command_resize, shell=True,
+        #                                  stderr=subprocess.STDOUT)
                   num_attempts=5,
                   url_base='https://www.youtube.com/watch?v='):
     """Download a video from youtube if exists and is not blocked.
@@ -101,6 +112,7 @@ def download_clip(video_identifier, output_filename,
                '-i', '"%s"' % tmp_filename,
                '-ss', str(start_time),
                '-t', str(end_time - start_time),
+               '-s', '-1:"%s"' % out_height,
                '-c:v', 'libx264', '-c:a', 'copy',
                '-threads', '1',
                '-loglevel', 'panic',
@@ -167,7 +179,9 @@ def main(input_csv, output_dir,
          drop_duplicates=False):
 
     # Reading and parsing Kinetics.
+    # print("parsing")
     dataset = parse_kinetics_annotations(input_csv)
+    # print("parsed")
     # if os.path.isfile(drop_duplicates):
     #     print('Attempt to remove duplicates')
     #     old_dataset = parse_kinetics_annotations(drop_duplicates,
@@ -180,7 +194,7 @@ def main(input_csv, output_dir,
 
     # Creates folders where videos will be saved later.
     label_to_dir = create_video_folders(dataset, output_dir, tmp_dir)
-
+    # print("folders_created!")
     # Download all clips.
     if num_jobs == 1:
         status_lst = []
@@ -190,7 +204,7 @@ def main(input_csv, output_dir,
     else:
         status_lst = Parallel(n_jobs=num_jobs)(delayed(download_clip_wrapper)(
             row, label_to_dir,
-            trim_format, tmp_dir) for i, row in dataset.iterrows())
+            trim_format, tmp_dir) for i, row in tqdm(dataset.iterrows(),total=len(dataset)))
 
     # Clean tmp dir.
     shutil.rmtree(tmp_dir)
