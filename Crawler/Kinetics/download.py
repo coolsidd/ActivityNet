@@ -195,7 +195,8 @@ def main(input_csv, output_dir,
         import requests
         import io
         print("Downloading csv")
-        url = 'https://gist.githubusercontent.com/willprice/f19da185c9c5f32847134b87c1960769/raw/9dc94028ecced572f302225c49fcdee2f3d748d8/kinetics_700_labels.csv'
+        # TODO add input param for csv
+        url = 'https://gist.githubusercontent.com/willprice/f19da185c9c5f32847134b87c1960769/raw/9dc94028ecced572f302225c49fcdee2f3d748d8/kinetics_400_labels.csv'
         r = requests.get(url, allow_redirects=True)
         labels_dict = {y:x for x,y in csv.reader(io.StringIO(r.content.decode("utf-8")))}
         # print(labels_dict)
